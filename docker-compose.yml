@@ -1,0 +1,106 @@
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    hostname: namenode
+    ports:
+      - "9870:9870"  # Namenode web UI
+      - "9000:9000"  # HDFS port
+    environment:
+      - CLUSTER_NAME=hadoop-cluster
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - CORE_CONF_hadoop_http_staticuser_user=root
+      - HDFS_CONF_dfs_replication=1
+      - HDFS_CONF_dfs_namenode_name_dir=file:///hadoop/dfs/name
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - hadoop_network
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    hostname: datanode
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - CORE_CONF_hadoop_http_staticuser_user=root
+      - HDFS_CONF_dfs_replication=1
+      - HDFS_CONF_dfs_datanode_data_dir=file:///hadoop/dfs/data
+      - SERVICE_PRECONDITION=namenode:9870
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    depends_on:
+      - namenode
+    networks:
+      - hadoop_network
+    ports:
+      - "9864:9864"  # Datanode web UI
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    hostname: resourcemanager
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - YARN_CONF_yarn_nodemanager_resource_memory_mb=1536
+      - YARN_CONF_yarn_scheduler_maximum_allocation_mb=1536
+      - YARN_CONF_yarn_scheduler_minimum_allocation_mb=128
+      - YARN_CONF_yarn_nodemanager_vmem_check_enabled=false
+      - SERVICE_PRECONDITION=namenode:9000 namenode:9870 datanode:9864
+    ports:
+      - "8088:8088"  # Resource Manager web UI
+    networks:
+      - hadoop_network
+    depends_on:
+      - namenode
+      - datanode
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager
+    hostname: nodemanager
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - YARN_CONF_yarn_resourcemanager_hostname=resourcemanager
+      - YARN_CONF_yarn_nodemanager_resource_memory_mb=1536
+      - YARN_CONF_yarn_scheduler_maximum_allocation_mb=1536
+      - YARN_CONF_yarn_scheduler_minimum_allocation_mb=128
+      - YARN_CONF_yarn_nodemanager_vmem_check_enabled=false
+      - SERVICE_PRECONDITION=namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088
+    networks:
+      - hadoop_network
+    depends_on:
+      - resourcemanager
+
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+    container_name: historyserver
+    hostname: historyserver
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - YARN_CONF_yarn_timeline-service_enabled=true
+      - YARN_CONF_yarn_timeline-service_generic-application-history_enabled=true
+      - YARN_CONF_yarn_resourcemanager_system-metrics-publisher_enabled=true
+      - SERVICE_PRECONDITION=namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    ports:
+      - "8188:8188"  # History Server web UI
+    networks:
+      - hadoop_network
+    depends_on:
+      - resourcemanager
+
+networks:
+  hadoop_network:
+    driver: bridge
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+  hadoop_historyserver:

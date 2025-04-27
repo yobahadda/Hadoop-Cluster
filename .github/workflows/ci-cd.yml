@@ -1,0 +1,70 @@
+name: Docker Compose CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Start services with Docker Compose
+      run: docker-compose -f docker-compose.yml up -d
+
+    - name: Wait for services to initialize
+      # This waits for a fixed time. A more robust check might involve
+      # polling service endpoints or checking logs until they are ready.
+      # The healthchecks and SERVICE_PRECONDITION in the compose file help,
+      # but an explicit wait here can increase reliability in CI.
+      run: |
+        echo "Waiting for services to become healthy..."
+        sleep 90 # Adjust time based on typical startup duration
+
+    - name: Check container statuses
+      run: docker-compose -f docker-compose.yml ps
+
+    - name: Verify NameNode Health
+      # Explicitly check the health status reported by Docker based on the healthcheck
+      run: |
+        echo "Verifying NameNode health..."
+        if [ "$(docker inspect -f '{{.State.Health.Status}}' namenode)" = "healthy" ]; then
+          echo "NameNode is healthy."
+        else
+          echo "NameNode failed health check."
+          docker logs namenode # Output logs for debugging
+          exit 1
+        fi
+
+    - name: Verify DataNode Health (Example - Add if DataNode has healthcheck)
+      run: |
+        echo "Verifying DataNode health..."
+        if [ "$(docker inspect -f '{{.State.Health.Status}}' datanode)" = "healthy" ]; then
+          echo "DataNode is healthy."
+        else
+          echo "DataNode failed health check."
+          docker logs datanode
+          exit 1
+        fi
+      # run: |
+      #   echo "Verifying DataNode health..."
+      #   if [ "$(docker inspect -f '{{.State.Health.Status}}' datanode)" = "healthy" ]; then
+      #     echo "DataNode is healthy."
+      #   else
+      #     echo "DataNode failed health check."
+      #     docker logs datanode
+      #     exit 1
+      #   fi
+      # Add checks for resourcemanager, nodemanager, historyserver as needed
+
+    - name: Stop and remove services
+      if: always() # Ensures cleanup even if previous steps fail
+      run: docker-compose -f docker-compose.yml down -v

@@ -1,4 +1,4 @@
-name: Docker Compose CI
+name: Docker Compose CI/CD
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Start services with Docker Compose
-      run: docker-compose -f docker-compose.yml up -d
+      run: docker compose -f docker-compose.yml up -d # Use docker compose (V2)
 
     - name: Wait for services to initialize
       # This waits for a fixed time. A more robust check might involve
@@ -30,7 +30,7 @@ jobs:
         sleep 90 # Adjust time based on typical startup duration
 
     - name: Check container statuses
-      run: docker-compose -f docker-compose.yml ps
+      run: docker compose -f docker-compose.yml ps # Use docker compose (V2)
 
     - name: Verify NameNode Health
       # Explicitly check the health status reported by Docker based on the healthcheck
@@ -67,4 +67,16 @@ jobs:
 
     - name: Stop and remove services
       if: always() # Ensures cleanup even if previous steps fail
-      run: docker-compose -f docker-compose.yml down -v
+      run: docker compose -f docker-compose.yml down -v # Use docker compose (V2)
+
+  # Add deployment steps here if needed for CD
+  # deploy:
+  #   needs: build-and-test
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Example: Deploy only on push to main
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #     # Add your deployment steps (e.g., login to registry, push images, deploy to server)
+  #     - name: Deploy application
+  #       run: echo "Deploying..." # Replace with actual deployment commands
